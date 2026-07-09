@@ -11,6 +11,7 @@ from visionlink.detection import FaceDetector
 from visionlink.exceptions import ImageLoadError
 from visionlink.gestures import GestureEngine
 from visionlink.landmarks import LandmarkDetector
+from visionlink.output import Visualizer, format_results, save_json
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -24,11 +25,29 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to a JPEG or PNG image",
     )
     parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=Path("output"),
+        help="Directory for annotated image and JSON (default: output/)",
+    )
+    parser.add_argument(
+        "--no-landmarks",
+        action="store_true",
+        help="Skip drawing landmark dots",
+    )
+    parser.add_argument(
+        "--no-json",
+        action="store_true",
+        help="Skip writing JSON results file",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"%(prog)s {__version__}",
     )
     return parser
+
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
@@ -49,10 +68,20 @@ def main(argv: list[str] | None = None) -> int:
     faces = GestureEngine().analyze_all(faces)
 
     print(f"Detected {len(faces)} face(s)")
+    results = format_results(faces)
     if faces:
-        for i, face in enumerate(faces, start=1):
-            print(f"\nFace {i}:")
-            print(json.dumps({"bbox": face.bbox.as_dict(), **face.gestures}, indent=2))
+        print(json.dumps(results, indent=2))
+
+    visualizer = Visualizer(draw_landmarks=not args.no_landmarks)
+    annotated = visualizer.annotate(image, faces)
+    image_out = args.output / f"{args.image.stem}_annotated.png"
+    visualizer.save(annotated, image_out)
+    print(f"Saved annotated image: {image_out}")
+
+    if not args.no_json:
+        json_out = args.output / f"{args.image.stem}.json"
+        save_json(results, json_out)
+        print(f"Saved JSON: {json_out}")
 
     return 0
 
