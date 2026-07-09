@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from typing import Literal
 
 from visionlink.gestures.landmark_indices import (
-    CHIN,
-    FOREHEAD,
     LEFT_CHEEK,
     LEFT_EYE,
     LOWER_LIP,
@@ -53,9 +51,9 @@ class GestureThresholds:
     mouth_aspect_ratio: float = 0.35
     smile_width_ratio: float = 0.42
     smile_corner_lift: float = 3.0
-    head_yaw_ratio: float = 0.04
-    head_pitch_up: float = 0.46
-    head_pitch_down: float = 0.54
+    head_yaw_z: float = 0.015
+    head_pitch_low: float = 0.38
+    head_pitch_high: float = 0.62
 
 
 class GestureEngine:
@@ -148,23 +146,28 @@ def _is_smiling(
 def _head_pose(
     landmarks: list[tuple[float, float, float]], thresholds: GestureThresholds
 ) -> HeadPose:
-    nose_x = landmarks[NOSE_TIP][0]
-    face_center_x = (landmarks[LEFT_CHEEK][0] + landmarks[RIGHT_CHEEK][0]) / 2
-    face_width = abs(landmarks[RIGHT_CHEEK][0] - landmarks[LEFT_CHEEK][0])
-    yaw_offset = (nose_x - face_center_x) / face_width if face_width > 0 else 0.0
+    # Yaw: depth difference between cheeks (z is smaller when closer to camera).
+    z_diff = landmarks[RIGHT_CHEEK][2] - landmarks[LEFT_CHEEK][2]
 
-    forehead_y = landmarks[FOREHEAD][1]
-    chin_y = landmarks[CHIN][1]
+    # Pitch: nose position between eyes and mouth (more stable than forehead/chin).
+    eye_y = _eye_line_y(landmarks)
+    mouth_y = (landmarks[UPPER_LIP][1] + landmarks[LOWER_LIP][1]) / 2
     nose_y = landmarks[NOSE_TIP][1]
-    face_height = chin_y - forehead_y
-    pitch_ratio = (nose_y - forehead_y) / face_height if face_height > 0 else 0.5
+    face_span = mouth_y - eye_y
+    pitch_ratio = (nose_y - eye_y) / face_span if face_span > 0 else 0.5
 
-    if pitch_ratio < thresholds.head_pitch_up:
+    if pitch_ratio < thresholds.head_pitch_low:
         return "up"
-    if pitch_ratio > thresholds.head_pitch_down:
+    if pitch_ratio > thresholds.head_pitch_high:
         return "down"
-    if yaw_offset > thresholds.head_yaw_ratio:
+    if z_diff > thresholds.head_yaw_z:
         return "left"
-    if yaw_offset < -thresholds.head_yaw_ratio:
+    if z_diff < -thresholds.head_yaw_z:
         return "right"
     return "center"
+
+
+def _eye_line_y(landmarks: list[tuple[float, float, float]]) -> float:
+    left_y = sum(landmarks[i][1] for i in LEFT_EYE) / len(LEFT_EYE)
+    right_y = sum(landmarks[i][1] for i in RIGHT_EYE) / len(RIGHT_EYE)
+    return (left_y + right_y) / 2

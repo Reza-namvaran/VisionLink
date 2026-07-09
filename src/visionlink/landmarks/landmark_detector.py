@@ -2,14 +2,14 @@
 
 from pathlib import Path
 
-import cv2
-import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from visionlink.mediapipe_utils import to_mediapipe_image
 from visionlink.models import Face, ImageArray
+from visionlink.paths import model_path
 
-MODEL_PATH = Path(__file__).resolve().parents[3] / "models" / "face_landmarker.task"
+MODEL_PATH = model_path("face_landmarker.task")
 
 
 class LandmarkDetector:
@@ -53,8 +53,7 @@ class LandmarkDetector:
         self, image: ImageArray
     ) -> list[list[tuple[float, float, float]]]:
         height, width = image.shape[:2]
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        mp_image = to_mediapipe_image(image)
         result = self._landmarker.detect(mp_image)
 
         all_landmarks: list[list[tuple[float, float, float]]] = []

@@ -1,15 +1,15 @@
+"""Face detection — FR-2."""
+
 from pathlib import Path
 
-import cv2
-import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+from visionlink.mediapipe_utils import to_mediapipe_image
 from visionlink.models import BoundingBox, Face, ImageArray
+from visionlink.paths import model_path
 
-MODEL_PATH = (
-    Path(__file__).resolve().parents[3] / "models" / "blaze_face_short_range.tflite"
-)
+MODEL_PATH = model_path("blaze_face_short_range.tflite")
 
 
 class FaceDetector:
@@ -35,8 +35,7 @@ class FaceDetector:
 
         Returns an empty list when no faces are found — never raises for that case.
         """
-        rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+        mp_image = to_mediapipe_image(image)
         result = self._detector.detect(mp_image)
 
         faces: list[Face] = []

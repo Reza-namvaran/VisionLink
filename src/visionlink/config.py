@@ -13,3 +13,8 @@ class Config:
     draw_landmarks: bool = True
     draw_boxes: bool = True
     save_json: bool = True
+    batch: bool = False
+
+    @property
+    def is_directory(self) -> bool:
+        return self.input_path.is_dir()
