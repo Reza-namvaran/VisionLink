@@ -9,6 +9,7 @@ from visionlink import __version__
 from visionlink.acquisition import load_image
 from visionlink.detection import FaceDetector
 from visionlink.exceptions import ImageLoadError
+from visionlink.gestures import GestureEngine
 from visionlink.landmarks import LandmarkDetector
 
 
@@ -45,12 +46,13 @@ def main(argv: list[str] | None = None) -> int:
         faces = detector.detect(image)
         faces = landmarker.add_landmarks(image, faces)
 
+    faces = GestureEngine().analyze_all(faces)
+
     print(f"Detected {len(faces)} face(s)")
     if faces:
         for i, face in enumerate(faces, start=1):
             print(f"\nFace {i}:")
-            print(json.dumps(face.bbox.as_dict(), indent=2))
-            print(f"Landmarks: {len(face.landmarks)}")
+            print(json.dumps({"bbox": face.bbox.as_dict(), **face.gestures}, indent=2))
 
     return 0
 
