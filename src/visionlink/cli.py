@@ -1,11 +1,13 @@
 """Command-line interface for VisionLink."""
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from visionlink import __version__
 from visionlink.acquisition import load_image
+from visionlink.detection import FaceDetector
 from visionlink.exceptions import ImageLoadError
 
 
@@ -36,7 +38,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     height, width = image.shape[:2]
-    print(f"Loaded {args.image} ({width}x{height}, {image.shape[2]} channels)")
+    print(f"Loaded {args.image} ({width}×{height}, {image.shape[2]} channels)")
+
+    with FaceDetector() as detector:
+        faces = detector.detect(image)
+
+    print(f"Detected {len(faces)} face(s)")
+    if faces:
+        boxes = [face.bbox.as_dict() for face in faces]
+        print(json.dumps(boxes, indent=2))
+
     return 0
 
 
