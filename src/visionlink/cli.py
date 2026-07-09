@@ -9,6 +9,7 @@ from visionlink import __version__
 from visionlink.acquisition import load_image
 from visionlink.detection import FaceDetector
 from visionlink.exceptions import ImageLoadError
+from visionlink.landmarks import LandmarkDetector
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -40,13 +41,16 @@ def main(argv: list[str] | None = None) -> int:
     height, width = image.shape[:2]
     print(f"Loaded {args.image} ({width}×{height}, {image.shape[2]} channels)")
 
-    with FaceDetector() as detector:
+    with FaceDetector() as detector, LandmarkDetector() as landmarker:
         faces = detector.detect(image)
+        faces = landmarker.add_landmarks(image, faces)
 
     print(f"Detected {len(faces)} face(s)")
     if faces:
-        boxes = [face.bbox.as_dict() for face in faces]
-        print(json.dumps(boxes, indent=2))
+        for i, face in enumerate(faces, start=1):
+            print(f"\nFace {i}:")
+            print(json.dumps(face.bbox.as_dict(), indent=2))
+            print(f"Landmarks: {len(face.landmarks)}")
 
     return 0
 
