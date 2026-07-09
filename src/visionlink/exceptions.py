@@ -6,3 +6,7 @@ class VisionLinkError(Exception):
 
 class ImageLoadError(VisionLinkError):
     """Raised when an image cannot be loaded or is invalid."""
+
+
+class WebcamError(VisionLinkError):
+    """Raised when the webcam cannot be opened or read."""

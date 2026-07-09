@@ -19,19 +19,28 @@ from visionlink.models import AnalysisResult
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="visionlink",
-        description="Detect facial gestures from images.",
+        description="Detect facial gestures from images or a live webcam.",
     )
     parser.add_argument(
         "input",
+        nargs="?",
         type=Path,
-        help="Path to an image or a directory of images (batch mode)",
+        help="Image file or directory (batch mode). Omit when using --webcam.",
+    )
+    parser.add_argument(
+        "--webcam",
+        nargs="?",
+        const=0,
+        type=int,
+        metavar="ID",
+        help="Use USB camera instead of an image (default ID: 0)",
     )
     parser.add_argument(
         "-o",
         "--output",
         type=Path,
         default=Path("output"),
-        help="Directory for annotated images and JSON (default: output/)",
+        help="Directory for output files (default: output/)",
     )
     parser.add_argument(
         "--no-landmarks",
@@ -46,7 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--no-image",
         action="store_true",
-        help="Skip saving annotated PNG files",
+        help="Skip saving annotated PNG files (image/batch mode)",
     )
     parser.add_argument(
         "--recursive",
@@ -111,7 +120,7 @@ def _print_results(results: list[AnalysisResult], config: Config) -> None:
         if result.error:
             print(f"  ✗ {result.source.name}: {result.error}", file=sys.stderr)
             continue
-        if config.batch or config.quiet:
+        if config.batch:
             timing = f" ({result.elapsed_ms:.0f} ms)" if result.elapsed_ms else ""
             print(f"  ✓ {result.source.name}: {result.face_count} face(s){timing}")
         elif result.faces:
@@ -134,24 +143,42 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     _configure_logging(args.verbose, args.quiet)
 
-    if not args.input.exists():
+    if args.webcam is not None and args.input is not None:
+        print("Error: use either an input path or --webcam, not both.", file=sys.stderr)
+        return 1
+
+    if args.webcam is None and args.input is None:
+        print("Error: provide an image path or use --webcam.", file=sys.stderr)
+        return 1
+
+    if args.input is not None and not args.input.exists():
         print(f"Error: Path not found: {args.input}", file=sys.stderr)
         return 1
 
     config = Config(
         input_path=args.input,
+        camera_id=args.webcam,
         output_dir=args.output,
         draw_landmarks=not args.no_landmarks,
         save_json=not args.no_json,
         save_annotated=not args.no_image,
-        batch=args.input.is_dir(),
+        batch=args.input is not None and args.input.is_dir(),
         recursive=args.recursive,
         quiet=args.quiet,
     )
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
-    with Pipeline(config) as pipeline:
-        results = pipeline.run()
+    try:
+        with Pipeline(config) as pipeline:
+            results = pipeline.run()
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+
+    if config.is_webcam:
+        if not config.quiet:
+            print("Webcam session ended.")
+        return 0
 
     if not config.batch and results and results[0].error:
         print(f"Error: {results[0].error}", file=sys.stderr)

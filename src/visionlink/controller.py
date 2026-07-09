@@ -2,17 +2,21 @@
 
 import logging
 import time
+from datetime import datetime, timezone
 from pathlib import Path
+
+import cv2
 
 from visionlink.acquisition import load_image
 from visionlink.acquisition.batch import iter_images
+from visionlink.acquisition.webcam import WebcamCapture
 from visionlink.config import Config
 from visionlink.detection import FaceDetector
 from visionlink.exceptions import ImageLoadError
 from visionlink.gestures import GestureEngine
 from visionlink.landmarks import LandmarkDetector
-from visionlink.models import AnalysisResult, ImageArray
-from visionlink.output import Visualizer, format_results, save_json
+from visionlink.models import AnalysisResult, Face, ImageArray
+from visionlink.output import Visualizer, draw_hud, format_results, save_json
 from visionlink.output.report import build_batch_stats, save_batch_report
 
 logger = logging.getLogger(__name__)
@@ -42,10 +46,54 @@ class Pipeline:
         self.close()
 
     def run(self) -> list[AnalysisResult]:
-        """Process a single image or every image in a directory."""
+        """Process a single image, batch directory, or webcam stream."""
+        if self._config.is_webcam:
+            self.run_webcam()
+            return []
+        if self._config.input_path is None:
+            raise ValueError("input_path is required for image/batch mode")
         if self._config.is_directory:
             return self.process_batch(self._config.input_path, self._config.output_dir)
         return [self.process_image(self._config.input_path, self._config.output_dir)]
+
+    def run_webcam(self) -> None:
+        """Run real-time analysis on a USB camera. Press q to quit, s to snapshot."""
+        camera_id = self._config.camera_id if self._config.camera_id is not None else 0
+        window = "VisionLink"
+        logger.info("Starting webcam %d — press q to quit, s to snapshot", camera_id)
+
+        self._config.output_dir.mkdir(parents=True, exist_ok=True)
+
+        with WebcamCapture(camera_id) as camera:
+            while True:
+                frame = camera.read()
+                if frame is None:
+                    logger.error("Failed to read frame from camera %d", camera_id)
+                    break
+
+                started = time.perf_counter()
+                faces = self.analyze_frame(frame)
+                elapsed_ms = (time.perf_counter() - started) * 1000
+
+                annotated = self._visualizer.annotate(frame, faces)
+                fps = 1000.0 / elapsed_ms if elapsed_ms > 0 else 0.0
+                draw_hud(annotated, fps=fps, face_count=len(faces))
+
+                cv2.imshow(window, annotated)
+                key = cv2.waitKey(1) & 0xFF
+                if key == ord("q"):
+                    break
+                if key == ord("s"):
+                    self._save_webcam_snapshot(annotated, faces)
+
+        cv2.destroyAllWindows()
+        logger.info("Webcam session ended")
+
+    def analyze_frame(self, image: ImageArray) -> list[Face]:
+        """Run detection, landmarks, and gestures on a single frame."""
+        faces = self._face_detector.detect(image)
+        faces = self._landmark_detector.add_landmarks(image, faces)
+        return self._gesture_engine.analyze_all(faces)
 
     def process_batch(
         self, input_dir: Path, output_dir: Path
@@ -91,7 +139,7 @@ class Pipeline:
             )
 
         height, width = image.shape[:2]
-        faces = self._analyze(image)
+        faces = self.analyze_frame(image)
         elapsed_ms = (time.perf_counter() - started) * 1000
         result = AnalysisResult(
             source=image_path,
@@ -117,7 +165,16 @@ class Pipeline:
         )
         return result
 
-    def _analyze(self, image: ImageArray):
-        faces = self._face_detector.detect(image)
-        faces = self._landmark_detector.add_landmarks(image, faces)
-        return self._gesture_engine.analyze_all(faces)
+    def _save_webcam_snapshot(self, frame: ImageArray, faces: list[Face]) -> Path:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        stem = f"webcam_{stamp}"
+        image_path = self._config.output_dir / f"{stem}.png"
+        json_path = self._config.output_dir / f"{stem}.json"
+
+        self._visualizer.save(frame, image_path)
+        if self._config.save_json:
+            save_json(format_results(faces, source=image_path), json_path)
+
+        logger.info("Saved snapshot: %s", image_path)
+        return image_path
+

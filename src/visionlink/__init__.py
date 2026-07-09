@@ -4,7 +4,7 @@ from visionlink.config import Config
 from visionlink.controller import Pipeline
 from visionlink.models import AnalysisResult, BoundingBox, Face
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __all__ = [
     "AnalysisResult",
     "BoundingBox",

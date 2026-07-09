@@ -1,9 +1,9 @@
 # VisionLink
 
-Modular computer vision framework for **facial gesture recognition** from images.  
-VisionLink runs fully offline on your machine — no cloud, no camera required for the current release.
+Modular computer vision framework for **facial gesture recognition** from images and live webcam feeds.  
+VisionLink runs fully offline on your machine — no cloud required.
 
-Process a single photo or an entire folder, then get annotated images and structured JSON output.
+Process a single photo, an entire folder, or a live camera feed.
 
 ---
 
@@ -18,6 +18,7 @@ Process a single photo or an entire folder, then get annotated images and struct
 | **Visualize** | Draw boxes, landmarks, and gesture labels on the image |
 | **Export** | Save annotated PNG + JSON results |
 | **Batch** | Process every image in a folder independently |
+| **Webcam** | Real-time gesture detection from a USB camera |
 
 ### Gestures detected
 
@@ -77,17 +78,16 @@ pip install -r requirements.txt
 pip install -e .
 
 # Download models (first-time setup)
-mkdir -p models
-wget -q -O models/blaze_face_short_range.tflite \
-  https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite
-wget -q -O models/face_landmarker.task \
-  https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
+bash scripts/download_models.sh
 
 # Single image
 visionlink images/face.jpg
 
 # Batch — process every image in a folder
 visionlink images/ -o results/
+
+# Live webcam (q to quit, s to snapshot)
+visionlink --webcam
 ```
 
 ---
@@ -95,16 +95,35 @@ visionlink images/ -o results/
 ## CLI usage
 
 ```text
-visionlink <image-or-folder> [-o OUTPUT] [--no-landmarks] [--no-json]
+visionlink [input] [--webcam [ID]] [-o OUTPUT] [options]
 ```
 
 | Argument / Flag | Description |
 |-----------------|-------------|
-| `input` | Path to a JPEG/PNG image **or** a directory (batch mode) |
+| `input` | Image file or directory (batch). Omit when using `--webcam` |
+| `--webcam [ID]` | Live USB camera (default ID `0`) |
 | `-o`, `--output` | Output directory (default: `output/`) |
-| `--no-landmarks` | Skip drawing landmark dots on the annotated image |
+| `--no-landmarks` | Skip drawing landmark dots |
 | `--no-json` | Skip writing JSON result files |
+| `--no-image` | Skip saving annotated PNGs (image/batch mode) |
+| `--recursive` | Include subfolders in batch mode |
+| `-q` / `--quiet` | Suppress normal output |
+| `-v` / `--verbose` | Debug logging |
 | `--version` | Print version and exit |
+
+### Webcam mode
+
+```bash
+visionlink --webcam          # camera 0
+visionlink --webcam 1        # second camera
+```
+
+| Key | Action |
+|-----|--------|
+| `q` | Quit |
+| `s` | Save snapshot to `output/webcam_YYYYMMDD_HHMMSS.png` |
+
+Live overlay shows FPS, face count, bounding boxes, landmarks, and gesture labels.
 
 ### Batch mode
 
@@ -141,7 +160,7 @@ CLI  →  Controller  →  Image Loader
 
 ```text
 src/visionlink/
-├── acquisition/    # Image loading + batch discovery
+├── acquisition/    # Image loading, batch, webcam
 ├── controller.py   # Pipeline orchestrator
 ├── detection/      # Face detection (MediaPipe BlazeFace)
 ├── landmarks/      # Landmark extraction (478 points)
@@ -166,10 +185,10 @@ src/visionlink/
 | Phase | Status |
 |-------|--------|
 | Phase 1 — Single image analysis (M1–M6) | ✓ |
-| Phase 2 — Batch processing (M7) | ✓ |
-| Phase 3 — Video processing | Planned |
-| Phase 4 — Webcam / real-time | Planned |
-| Phase 5 — Arduino serial communication | Planned |
+| Phase 2 — Batch + evaluation reports (M7) | ✓ |
+| Phase 4 — Webcam / real-time (M8) | ✓ |
+| Phase 3 — Video file processing | Planned |
+| Phase 5 — Arduino serial communication (M9) | Planned |
 
 ---
 
