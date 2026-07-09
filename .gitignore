@@ -157,8 +157,8 @@ ENV/
 env.bak/
 venv.bak/
 
-# VisionLink generated output
-output/
+# VisionLink generated output (repo root only)
+/output/
 
 # Spyder project settings
 .spyderproject

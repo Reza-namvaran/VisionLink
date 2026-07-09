@@ -1,5 +1,7 @@
 """Vision pipeline controller."""
 
+import logging
+import time
 from pathlib import Path
 
 from visionlink.acquisition import load_image
@@ -11,6 +13,9 @@ from visionlink.gestures import GestureEngine
 from visionlink.landmarks import LandmarkDetector
 from visionlink.models import AnalysisResult, ImageArray
 from visionlink.output import Visualizer, format_results, save_json
+from visionlink.output.report import build_batch_stats, save_batch_report
+
+logger = logging.getLogger(__name__)
 
 
 class Pipeline:
@@ -46,37 +51,70 @@ class Pipeline:
         self, input_dir: Path, output_dir: Path
     ) -> list[AnalysisResult]:
         results: list[AnalysisResult] = []
-        for image_path in iter_images(input_dir):
+        images = list(
+            iter_images(input_dir, recursive=self._config.recursive)
+        )
+        if not images:
+            logger.warning("No images found in %s", input_dir)
+            return results
+
+        for image_path in images:
             results.append(self.process_image(image_path, output_dir))
 
         if self._config.save_json:
             summary_path = output_dir / "batch_summary.json"
             save_json(
                 {
-                    "images_processed": len(results),
+                    **build_batch_stats(results),
                     "results": [result.as_dict() for result in results],
                 },
                 summary_path,
             )
+
+        if self._config.save_report and len(results) > 1:
+            report_path = output_dir / "batch_report.txt"
+            save_batch_report(results, report_path)
+            logger.info("Saved batch report: %s", report_path)
+
         return results
 
     def process_image(self, image_path: Path, output_dir: Path) -> AnalysisResult:
+        started = time.perf_counter()
         try:
             image = load_image(image_path)
         except ImageLoadError as exc:
-            return AnalysisResult(source=image_path, error=str(exc))
+            logger.error("Failed to load %s: %s", image_path.name, exc)
+            return AnalysisResult(
+                source=image_path,
+                error=str(exc),
+                elapsed_ms=(time.perf_counter() - started) * 1000,
+            )
 
+        height, width = image.shape[:2]
         faces = self._analyze(image)
-        result = AnalysisResult(source=image_path, faces=faces)
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        result = AnalysisResult(
+            source=image_path,
+            faces=faces,
+            elapsed_ms=elapsed_ms,
+            image_size=(width, height),
+        )
 
-        annotated = self._visualizer.annotate(image, faces)
-        image_out = output_dir / f"{image_path.stem}_annotated.png"
-        self._visualizer.save(annotated, image_out)
+        if self._config.save_annotated:
+            annotated = self._visualizer.annotate(image, faces)
+            image_out = output_dir / f"{image_path.stem}_annotated.png"
+            self._visualizer.save(annotated, image_out)
 
         if self._config.save_json:
             json_out = output_dir / f"{image_path.stem}.json"
             save_json(format_results(faces, source=image_path), json_out)
 
+        logger.debug(
+            "Processed %s in %.0f ms (%d face(s))",
+            image_path.name,
+            elapsed_ms,
+            result.face_count,
+        )
         return result
 
     def _analyze(self, image: ImageArray):

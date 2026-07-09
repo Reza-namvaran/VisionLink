@@ -44,10 +44,16 @@ class AnalysisResult:
     source: Path
     faces: list[Face] = field(default_factory=list)
     error: str | None = None
+    elapsed_ms: float | None = None
+    image_size: tuple[int, int] | None = None  # (width, height)
 
     @property
     def face_count(self) -> int:
         return len(self.faces)
+
+    @property
+    def ok(self) -> bool:
+        return self.error is None
 
     def as_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -59,5 +65,12 @@ class AnalysisResult:
         }
         if self.error:
             payload["error"] = self.error
+        if self.elapsed_ms is not None:
+            payload["elapsed_ms"] = round(self.elapsed_ms, 1)
+        if self.image_size is not None:
+            payload["image_size"] = {
+                "width": self.image_size[0],
+                "height": self.image_size[1],
+            }
         return payload
 

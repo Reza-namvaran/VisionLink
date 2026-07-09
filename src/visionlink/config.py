@@ -13,7 +13,11 @@ class Config:
     draw_landmarks: bool = True
     draw_boxes: bool = True
     save_json: bool = True
+    save_report: bool = True
+    save_annotated: bool = True
     batch: bool = False
+    recursive: bool = False
+    quiet: bool = False
 
     @property
     def is_directory(self) -> bool:
