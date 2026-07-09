@@ -109,6 +109,8 @@ visionlink [input] [--webcam [ID]] [-o OUTPUT] [options]
 | `--recursive` | Include subfolders in batch mode |
 | `-q` / `--quiet` | Suppress normal output |
 | `-v` / `--verbose` | Debug logging |
+| `--serial PORT` | Send gestures to Arduino (`/dev/ttyUSB0`, `COM3`, …) |
+| `--baud` | Serial baud rate (default: `9600`) |
 | `--version` | Print version and exit |
 
 ### Webcam mode
@@ -124,6 +126,34 @@ visionlink --webcam 1        # second camera
 | `s` | Save snapshot to `output/webcam_YYYYMMDD_HHMMSS.png` |
 
 Live overlay shows FPS, face count, bounding boxes, landmarks, and gesture labels.
+
+### Arduino serial (M9)
+
+VisionLink sends **high-level text commands** to an Arduino over USB serial.  
+The Arduino does no image processing — it only receives commands like `SMILE`, `LEFT`, `FACE_FOUND`.
+
+```bash
+pip install -e ".[arduino]"
+
+# Upload arduino/visionlink_receiver/visionlink_receiver.ino to your Uno first
+
+# Webcam + Arduino
+visionlink --webcam --serial /dev/ttyUSB0
+
+# Single image + Arduino
+visionlink images/face.jpg --serial COM3
+```
+
+| Command | Meaning |
+|---------|---------|
+| `FACE_FOUND` | At least one face detected |
+| `NO_FACE` | No face in frame |
+| `SMILE` | Smiling |
+| `MOUTH_OPEN` | Mouth open |
+| `EYES_CLOSED` | Both eyes closed |
+| `LEFT` / `RIGHT` / `UP` / `DOWN` | Head pose |
+
+Commands are sent only when the gesture state **changes** (avoids flooding the serial bus).
 
 ### Batch mode
 
@@ -165,6 +195,7 @@ src/visionlink/
 ├── detection/      # Face detection (MediaPipe BlazeFace)
 ├── landmarks/      # Landmark extraction (478 points)
 ├── gestures/       # Gesture recognition (EAR, MAR, head pose)
+├── hardware/       # Arduino serial bridge (M9)
 ├── output/         # Visualization + JSON export
 ├── cli.py          # Command-line interface
 └── models.py       # Shared data types (Face, BoundingBox, …)
@@ -187,8 +218,8 @@ src/visionlink/
 | Phase 1 — Single image analysis (M1–M6) | ✓ |
 | Phase 2 — Batch + evaluation reports (M7) | ✓ |
 | Phase 4 — Webcam / real-time (M8) | ✓ |
+| Phase 5 — Arduino serial (M9) | ✓ |
 | Phase 3 — Video file processing | Planned |
-| Phase 5 — Arduino serial communication (M9) | Planned |
 
 ---
 

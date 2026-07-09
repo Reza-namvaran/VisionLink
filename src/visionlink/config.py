@@ -19,6 +19,8 @@ class Config:
     batch: bool = False
     recursive: bool = False
     quiet: bool = False
+    serial_port: str | None = None
+    serial_baud: int = 9600
 
     @property
     def is_webcam(self) -> bool:
@@ -27,3 +29,7 @@ class Config:
     @property
     def is_directory(self) -> bool:
         return self.input_path is not None and self.input_path.is_dir()
+
+    @property
+    def serial_enabled(self) -> bool:
+        return self.serial_port is not None

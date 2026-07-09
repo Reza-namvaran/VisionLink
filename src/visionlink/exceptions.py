@@ -10,3 +10,7 @@ class ImageLoadError(VisionLinkError):
 
 class WebcamError(VisionLinkError):
     """Raised when the webcam cannot be opened or read."""
+
+
+class SerialConnectionError(VisionLinkError):
+    """Raised when the Arduino serial port cannot be opened or used."""

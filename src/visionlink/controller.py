@@ -14,6 +14,7 @@ from visionlink.config import Config
 from visionlink.detection import FaceDetector
 from visionlink.exceptions import ImageLoadError
 from visionlink.gestures import GestureEngine
+from visionlink.hardware import GestureSerialBridge, SerialSender
 from visionlink.landmarks import LandmarkDetector
 from visionlink.models import AnalysisResult, Face, ImageArray
 from visionlink.output import Visualizer, draw_hud, format_results, save_json
@@ -34,10 +35,21 @@ class Pipeline:
             draw_boxes=config.draw_boxes,
             draw_landmarks=config.draw_landmarks,
         )
+        self._serial: GestureSerialBridge | None = None
+        if config.serial_enabled:
+            sender = SerialSender(config.serial_port, config.serial_baud)
+            self._serial = GestureSerialBridge(sender)
+            logger.info(
+                "Arduino serial enabled on %s @ %d baud",
+                config.serial_port,
+                config.serial_baud,
+            )
 
     def close(self) -> None:
         self._face_detector.close()
         self._landmark_detector.close()
+        if self._serial is not None:
+            self._serial.close()
 
     def __enter__(self) -> "Pipeline":
         return self
@@ -74,6 +86,7 @@ class Pipeline:
                 started = time.perf_counter()
                 faces = self.analyze_frame(frame)
                 elapsed_ms = (time.perf_counter() - started) * 1000
+                self._publish_serial(faces)
 
                 annotated = self._visualizer.annotate(frame, faces)
                 fps = 1000.0 / elapsed_ms if elapsed_ms > 0 else 0.0
@@ -140,6 +153,7 @@ class Pipeline:
 
         height, width = image.shape[:2]
         faces = self.analyze_frame(image)
+        self._publish_serial(faces)
         elapsed_ms = (time.perf_counter() - started) * 1000
         result = AnalysisResult(
             source=image_path,
@@ -177,4 +191,9 @@ class Pipeline:
 
         logger.info("Saved snapshot: %s", image_path)
         return image_path
+
+    def _publish_serial(self, faces: list[Face]) -> list[str]:
+        if self._serial is None:
+            return []
+        return self._serial.publish(faces)
 

@@ -13,6 +13,7 @@ quiet_third_party_logs()
 from visionlink import __version__
 from visionlink.config import Config
 from visionlink.controller import Pipeline
+from visionlink.exceptions import SerialConnectionError
 from visionlink.models import AnalysisResult
 
 
@@ -73,6 +74,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--verbose",
         action="store_true",
         help="Enable debug logging",
+    )
+    parser.add_argument(
+        "--serial",
+        metavar="PORT",
+        help="Send gestures to Arduino on this serial port (e.g. /dev/ttyUSB0, COM3)",
+    )
+    parser.add_argument(
+        "--baud",
+        type=int,
+        default=9600,
+        help="Serial baud rate for Arduino (default: 9600)",
     )
     parser.add_argument(
         "--version",
@@ -165,12 +177,17 @@ def main(argv: list[str] | None = None) -> int:
         batch=args.input is not None and args.input.is_dir(),
         recursive=args.recursive,
         quiet=args.quiet,
+        serial_port=args.serial,
+        serial_baud=args.baud,
     )
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
     try:
         with Pipeline(config) as pipeline:
             results = pipeline.run()
+    except SerialConnectionError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
